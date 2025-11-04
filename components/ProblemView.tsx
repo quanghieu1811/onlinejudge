@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Problem } from '../types';
 
@@ -39,7 +38,7 @@ export const ProblemView: React.FC<ProblemViewProps> = ({ problem, isLoading }) 
   if (!problem) {
     return (
       <div className="p-8 bg-secondary rounded-lg h-full flex items-center justify-center">
-        <p className="text-text-secondary">Generate a problem to begin.</p>
+        <p className="text-text-secondary">Chọn một bài toán từ danh sách để bắt đầu.</p>
       </div>
     );
   }
@@ -50,22 +49,22 @@ export const ProblemView: React.FC<ProblemViewProps> = ({ problem, isLoading }) 
       
       <div className="space-y-6">
         <div>
-          <h2 className="text-xl font-semibold text-text-primary mb-3">Description</h2>
-          <p className="text-text-secondary leading-relaxed">{problem.description}</p>
+          <h2 className="text-xl font-semibold text-text-primary mb-3">Mô tả</h2>
+          <p className="text-text-secondary leading-relaxed whitespace-pre-line">{problem.description}</p>
         </div>
         
         <div>
-          <h2 className="text-xl font-semibold text-text-primary mb-3">Input Format</h2>
-          <p className="text-text-secondary leading-relaxed">{problem.inputFormat}</p>
+          <h2 className="text-xl font-semibold text-text-primary mb-3">Định dạng Input</h2>
+          <p className="text-text-secondary leading-relaxed whitespace-pre-line">{problem.inputFormat}</p>
         </div>
         
         <div>
-          <h2 className="text-xl font-semibold text-text-primary mb-3">Output Format</h2>
-          <p className="text-text-secondary leading-relaxed">{problem.outputFormat}</p>
+          <h2 className="text-xl font-semibold text-text-primary mb-3">Định dạng Output</h2>
+          <p className="text-text-secondary leading-relaxed whitespace-pre-line">{problem.outputFormat}</p>
         </div>
         
         <div>
-          <h2 className="text-xl font-semibold text-text-primary mb-3">Constraints</h2>
+          <h2 className="text-xl font-semibold text-text-primary mb-3">Ràng buộc</h2>
           <ul className="list-disc list-inside text-text-secondary space-y-1">
             {problem.constraints.map((constraint, index) => (
               <li key={index}>{constraint}</li>
@@ -74,10 +73,10 @@ export const ProblemView: React.FC<ProblemViewProps> = ({ problem, isLoading }) 
         </div>
 
         <div>
-           <h2 className="text-xl font-semibold text-text-primary mb-3">Sample Cases</h2>
+           <h2 className="text-xl font-semibold text-text-primary mb-3">Ví dụ</h2>
            {problem.samples.map((sample, index) => (
              <div key={index} className="mb-4 last:mb-0">
-               <h3 className="font-semibold text-text-primary mb-2">Sample {index + 1}</h3>
+               <h3 className="font-semibold text-text-primary mb-2">Ví dụ {index + 1}</h3>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div className="bg-accent p-4 rounded-lg">
                    <h4 className="font-mono text-sm text-text-secondary mb-2">Input:</h4>

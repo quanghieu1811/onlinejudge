@@ -1,5 +1,5 @@
-
 export interface Problem {
+  id: string;
   title: string;
   description: string;
   inputFormat: string;
@@ -26,4 +26,11 @@ export interface SubmissionResult {
   verdict: Verdict;
   explanation: string;
   details: string | null;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  password?: string; // Should be handled securely in a real app
+  role: 'admin' | 'user';
 }
