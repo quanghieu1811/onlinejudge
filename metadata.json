@@ -1,0 +1,5 @@
+{
+  "name": "Gemini Informatics Judge",
+  "description": "An online judge for informatics problems, powered by the Gemini API. Users can generate programming challenges and submit their code for evaluation, receiving instant, intelligent feedback on correctness, efficiency, and potential errors.",
+  "requestFramePermissions": []
+}
