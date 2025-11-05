@@ -2,14 +2,12 @@ import React, { useState } from 'react';
 import { User } from '../types';
 
 interface AuthProps {
+  users: User[];
   onLogin: (user: User) => void;
-  authService: {
-    getUsers: () => User[];
-    saveUsers: (users: User[]) => void;
-  };
+  onRegister: (user: User) => void;
 }
 
-const Auth: React.FC<AuthProps> = ({ onLogin, authService }) => {
+const Auth: React.FC<AuthProps> = ({ users, onLogin, onRegister }) => {
   const [isLoginView, setIsLoginView] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -19,103 +17,78 @@ const Auth: React.FC<AuthProps> = ({ onLogin, authService }) => {
     e.preventDefault();
     setError(null);
 
-    if (!username || !password) {
-      setError('Tên đăng nhập và mật khẩu không được để trống.');
-      return;
-    }
-
-    const users = authService.getUsers();
-
     if (isLoginView) {
       const user = users.find(u => u.username === username && u.password === password);
       if (user) {
         onLogin(user);
       } else {
-        setError('Tên đăng nhập hoặc mật khẩu không đúng.');
+        setError('Tên đăng nhập hoặc mật khẩu không hợp lệ.');
       }
     } else {
-      // Register
       if (users.some(u => u.username === username)) {
         setError('Tên đăng nhập đã tồn tại.');
-        return;
+      } else if (username.length < 3 || password.length < 4) {
+        setError('Tên đăng nhập cần ít nhất 3 ký tự, mật khẩu cần ít nhất 4 ký tự.');
       }
-      const newUser: User = {
-        id: `user_${Date.now()}`,
-        username,
-        password, // In a real app, hash this password!
-        role: 'user'
-      };
-      const updatedUsers = [...users, newUser];
-      authService.saveUsers(updatedUsers);
-      onLogin(newUser);
+      else {
+        const newUser: User = { username, password, role: 'student' }; // Default role is student
+        onRegister(newUser);
+        // Automatically log in the new user
+        onLogin(newUser);
+      }
     }
   };
 
   return (
     <div className="min-h-screen bg-primary flex items-center justify-center">
-      <div className="w-full max-w-md p-8 space-y-8 bg-secondary rounded-lg shadow-lg">
-        <div className="text-center">
-            <h1 className="text-3xl font-bold text-highlight">Welcome to Gemini Judge</h1>
-            <p className="text-text-secondary mt-2">
-                {isLoginView ? 'Đăng nhập để tiếp tục' : 'Tạo tài khoản mới'}
-            </p>
-        </div>
-        
-        <div className="flex justify-center border-b border-accent">
-          <button 
-            onClick={() => { setIsLoginView(true); setError(null); }}
-            className={`px-6 py-2 font-semibold transition-colors ${isLoginView ? 'text-highlight border-b-2 border-highlight' : 'text-text-secondary'}`}
-          >
-            Đăng nhập
-          </button>
-          <button
-            onClick={() => { setIsLoginView(false); setError(null); }}
-            className={`px-6 py-2 font-semibold transition-colors ${!isLoginView ? 'text-highlight border-b-2 border-highlight' : 'text-text-secondary'}`}
-          >
-            Đăng ký
-          </button>
-        </div>
-
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="username" className="text-sm font-medium text-text-primary block mb-2">
+      <div className="w-full max-w-md bg-secondary p-8 rounded-lg shadow-lg">
+        <h1 className="text-3xl font-bold text-center text-highlight mb-6">
+          {isLoginView ? 'Chào mừng trở lại' : 'Tạo tài khoản'}
+        </h1>
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-text-secondary text-sm font-bold mb-2" htmlFor="username">
               Tên đăng nhập
             </label>
             <input
               id="username"
-              name="username"
               type="text"
-              autoComplete="username"
-              required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 bg-accent border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent"
+              className="w-full bg-accent text-text-primary px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-highlight"
+              required
             />
           </div>
-          <div>
-            <label htmlFor="password"className="text-sm font-medium text-text-primary block mb-2">
+          <div className="mb-6">
+            <label className="block text-text-secondary text-sm font-bold mb-2" htmlFor="password">
               Mật khẩu
             </label>
             <input
               id="password"
-              name="password"
               type="password"
-              autoComplete="current-password"
-              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-accent border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent"
+              className="w-full bg-accent text-text-primary px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-highlight"
+              required
             />
           </div>
-          
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          
-          <div>
+          {error && <p className="text-red-400 text-xs italic mb-4">{error}</p>}
+          <div className="flex items-center justify-between">
             <button
               type="submit"
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-highlight hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-highlight transition-colors"
+              className="bg-highlight text-white font-bold py-2 px-4 rounded-md hover:bg-red-500 transition-colors"
             >
               {isLoginView ? 'Đăng nhập' : 'Đăng ký'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsLoginView(!isLoginView);
+                setError(null);
+              }}
+              className="inline-block align-baseline font-bold text-sm text-text-secondary hover:text-text-primary"
+            >
+              {isLoginView ? 'Chưa có tài khoản?' : 'Đã có tài khoản?'}
             </button>
           </div>
         </form>

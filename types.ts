@@ -1,16 +1,3 @@
-export interface Problem {
-  id: string;
-  title: string;
-  description: string;
-  inputFormat: string;
-  outputFormat: string;
-  constraints: string[];
-  samples: {
-    input: string;
-    output: string;
-    explanation?: string;
-  }[];
-}
 
 export enum Verdict {
   Accepted = "Accepted",
@@ -19,18 +6,45 @@ export enum Verdict {
   CompilationError = "Compilation Error",
   RuntimeError = "Runtime Error",
   Pending = "Pending",
-  Judging = "Judging",
+}
+
+export type Difficulty = "Easy" | "Medium" | "Hard";
+export type UserRole = "student" | "teacher" | "admin";
+
+export interface User {
+  username: string;
+  password?: string; // Password might not always be present on client
+  role: UserRole;
+}
+
+export interface TestCase {
+  id: string;
+  input: string;
+  output: string;
+  isPublic?: boolean; // Optional: for displaying sample test cases
+}
+
+export interface Problem {
+  id: string;
+  title: string;
+  description: string; // Markdown format
+  difficulty: Difficulty;
+  testCases: TestCase[];
 }
 
 export interface SubmissionResult {
   verdict: Verdict;
   explanation: string;
-  details: string | null;
+  details?: string; // For compiler errors, runtime errors, or failed test case info
 }
 
-export interface User {
+export interface Submission {
   id: string;
-  username: string;
-  password?: string; // Should be handled securely in a real app
-  role: 'admin' | 'user';
+  userId: string;
+  problemId: string;
+  problemTitle: string;
+  code: string;
+  language: string;
+  timestamp: number;
+  result: SubmissionResult;
 }

@@ -1,205 +1,287 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Problem, SubmissionResult, Verdict, User } from './types';
-import { generateProblem, judgeCode } from './services/geminiService';
-import { ProblemView } from './components/ProblemView';
-import CodeEditor from './components/CodeEditor';
-import ResultDisplay from './components/ResultDisplay';
-import { SUPPORTED_LANGUAGES, DEFAULT_CODE } from './constants';
+import React, { useState, useEffect } from 'react';
 import Auth from './components/Auth';
 import ProblemList from './components/ProblemList';
+import ProblemView from './components/ProblemView';
+import CodeEditor from './components/CodeEditor';
+import ResultDisplay from './components/ResultDisplay';
+import SubmissionsView from './components/SubmissionsView';
+import UserManagementView from './components/UserManagementView';
+import TestCaseManager from './components/TestCaseManager';
+import CreateProblemModal from './components/CreateProblemModal';
+import GenerateProblemAIModal from './components/GenerateProblemAIModal'; // Import new component
+import ChangePasswordModal from './components/ChangePasswordModal';
+import { User, Problem, Submission, SubmissionResult, Verdict, Difficulty, TestCase, UserRole } from './types';
+import { judgeCode } from './services/geminiService';
+import { SUPPORTED_LANGUAGES, DEFAULT_CODE } from './constants';
 
-// --- Mock User Service ---
-// In a real app, this would be an API call to a backend.
-const mockAuth = {
-  getUsers: (): User[] => JSON.parse(localStorage.getItem('users') || '[]'),
-  saveUsers: (users: User[]) => localStorage.setItem('users', JSON.stringify(users)),
-  getCurrentUser: (): User | null => JSON.parse(localStorage.getItem('currentUser') || 'null'),
-  setCurrentUser: (user: User | null) => localStorage.setItem('currentUser', JSON.stringify(user)),
-};
+// Dummy data
+const initialUsers: User[] = [
+    { username: 'admin', password: 'password', role: 'admin' },
+    { username: 'teacher', password: 'password', role: 'teacher' },
+    { username: 'student', password: 'password', role: 'student' },
+];
+
+const initialProblems: Problem[] = [
+    {
+        id: 'p1',
+        title: 'Tính tổng hai số',
+        description: `
+Cho một mảng các số nguyên \`nums\` và một số nguyên \`target\`, trả về chỉ số của hai số trong mảng sao cho tổng của chúng bằng \`target\`.
+
+Bạn có thể giả định rằng mỗi đầu vào sẽ có **chính xác một giải pháp**, và bạn không được sử dụng cùng một phần tử hai lần.
+
+Bạn có thể trả về câu trả lời theo bất kỳ thứ tự nào.
+
+**Ví dụ 1:**
+- Đầu vào: \`nums = [2,7,11,15]\`, \`target = 9\`
+- Đầu ra: \`[0,1]\`
+- Giải thích: Vì nums[0] + nums[1] == 9, chúng ta trả về [0, 1].
+
+**Ví dụ 2:**
+- Đầu vào: \`nums = [3,2,4]\`, \`target = 6\`
+- Đầu ra: \`[1,2]\`
+        `,
+        difficulty: 'Easy',
+        testCases: [
+            { id: 'tc1-1', input: '2 7 11 15\n9', output: '0 1', isPublic: true },
+            { id: 'tc1-2', input: '3 2 4\n6', output: '1 2', isPublic: false },
+        ]
+    },
+    {
+        id: 'p2',
+        title: 'Cộng hai số dạng danh sách liên kết',
+        description: 'Bạn được cho hai danh sách liên kết không rỗng đại diện cho hai số nguyên không âm. Các chữ số được lưu trữ theo thứ tự ngược lại, và mỗi nút của chúng chứa một chữ số duy nhất. Hãy cộng hai số và trả về tổng dưới dạng một danh sách liên kết.',
+        difficulty: 'Medium',
+        testCases: [{ id: 'tc2-1', input: '[2,4,3]\n[5,6,4]', output: '[7,0,8]', isPublic: true }]
+    },
+];
+
+type View = 'IDE' | 'Submissions' | 'UserManagement';
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [problems, setProblems] = useState<Problem[]>([]);
-  const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null);
-  const [code, setCode] = useState<string>(DEFAULT_CODE[SUPPORTED_LANGUAGES[0]]);
-  const [language, setLanguage] = useState<string>(SUPPORTED_LANGUAGES[0]);
-  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
+    // State management
+    const [users, setUsers] = useState<User[]>(initialUsers);
+    const [problems, setProblems] = useState<Problem[]>([]);
+    const [submissions, setSubmissions] = useState<Submission[]>([]);
+    const [isLoadingProblems, setIsLoadingProblems] = useState<boolean>(true);
+    
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+    const [activeView, setActiveView] = useState<View>('IDE');
+    const [activeFilter, setActiveFilter] = useState<Difficulty | 'All'>('All');
 
-  const [isGeneratingProblem, setIsGeneratingProblem] = useState<boolean>(false);
-  const [isJudging, setIsJudging] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Initialize app state from localStorage
-  useEffect(() => {
-    const user = mockAuth.getCurrentUser();
-    if (user) {
-      setCurrentUser(user);
-    }
+    // IDE State
+    const [language, setLanguage] = useState<string>(SUPPORTED_LANGUAGES[0]);
+    const [code, setCode] = useState<string>(DEFAULT_CODE[language]);
+    const [isJudging, setIsJudging] = useState<boolean>(false);
+    const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
+    
+    // Modal State
+    const [problemToManage, setProblemToManage] = useState<Problem | null>(null);
+    const [isCreateProblemModalOpen, setIsCreateProblemModalOpen] = useState(false);
+    const [isGenerateProblemModalOpen, setIsGenerateProblemModalOpen] = useState(false);
+    const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+    
+    useEffect(() => {
+        // Simulate fetching initial problems from a server
+        const timer = setTimeout(() => {
+            setProblems(initialProblems);
+            setSelectedProblemId('p1'); // Select first problem by default
+            setIsLoadingProblems(false);
+        }, 1500); // 1.5 second delay
 
-    let storedProblems = JSON.parse(localStorage.getItem('problems') || '[]');
-    if (storedProblems.length === 0) {
-      // Seed with an initial problem if none exist
-        const seedProblem: Problem = {
-            id: 'problem_seed',
-            title: 'Bài toán khởi đầu: Tổng hai số',
-            description: 'Viết chương trình đọc hai số nguyên A và B, sau đó in ra tổng của chúng.',
-            inputFormat: 'Một dòng duy nhất chứa hai số nguyên A và B (0 <= A, B <= 1,000,000) cách nhau bởi một khoảng trắng.',
-            outputFormat: 'In ra một số nguyên duy nhất là tổng của A và B.',
-            constraints: ['A và B là các số nguyên không âm.'],
-            samples: [{
-                input: '5 8',
-                output: '13',
-                explanation: '5 + 8 = 13'
-            }]
+        return () => clearTimeout(timer); // Cleanup on unmount
+    }, []);
+
+    const selectedProblem = problems.find(p => p.id === selectedProblemId) || null;
+    const filteredProblems = problems.filter(p => activeFilter === 'All' || p.difficulty === activeFilter);
+
+    // Handlers
+    const handleLogin = (user: User) => setCurrentUser(user);
+    const handleLogout = () => setCurrentUser(null);
+    
+    const handleSubmitCode = async () => {
+        if (!selectedProblem || !currentUser) return;
+        
+        setIsJudging(true);
+        setSubmissionResult({ verdict: Verdict.Pending, explanation: 'Bài nộp của bạn đang được chấm...', details: '' });
+
+        const result = await judgeCode(selectedProblem, code, language);
+        
+        const newSubmission: Submission = {
+            id: `sub-${Date.now()}`,
+            userId: currentUser.username,
+            problemId: selectedProblem.id,
+            problemTitle: selectedProblem.title,
+            code,
+            language,
+            timestamp: Date.now(),
+            result,
         };
-        storedProblems = [seedProblem];
-        localStorage.setItem('problems', JSON.stringify(storedProblems));
+        
+        setSubmissions(prev => [newSubmission, ...prev]);
+        setSubmissionResult(result);
+        setIsJudging(false);
+    };
+    
+    const handleUpdateUserRole = (username: string, role: UserRole) => {
+        setUsers(users.map(u => u.username === username ? { ...u, role } : u));
+    };
+    
+    const handleDeleteUser = (username: string) => {
+        if (window.confirm(`Bạn có chắc muốn xóa người dùng "${username}" không?`)) {
+            setUsers(users.filter(u => u.username !== username));
+        }
+    };
+    
+    const handleChangePassword = async (currentPassword: string, newPassword: string) => {
+        if (!currentUser) throw new Error("Không tìm thấy người dùng hiện tại.");
+        
+        const userInDb = users.find(u => u.username === currentUser.username);
+        if (userInDb?.password !== currentPassword) {
+            throw new Error("Mật khẩu hiện tại không chính xác.");
+        }
+        
+        const updatedUsers = users.map(u => 
+            u.username === currentUser.username ? { ...u, password: newPassword } : u
+        );
+        setUsers(updatedUsers);
+    };
+
+    const handleUpdateTestCases = (problemId: string, updatedTestCases: TestCase[]) => {
+        setProblems(prevProblems => prevProblems.map(p => 
+            p.id === problemId ? { ...p, testCases: updatedTestCases } : p
+        ));
+    };
+
+    const handleCreateProblem = (newProblemData: Omit<Problem, 'id'>) => {
+        const newProblem: Problem = {
+            id: `p${Date.now()}`, // Simple unique ID
+            ...newProblemData
+        };
+        setProblems(prev => [newProblem, ...prev]);
+        setIsCreateProblemModalOpen(false);
+        setIsGenerateProblemModalOpen(false);
+    };
+
+    const handleDeleteProblem = (problemId: string) => {
+        if (window.confirm("Bạn có chắc muốn xóa bài toán này? Hành động này không thể hoàn tác.")) {
+            setProblems(prev => prev.filter(p => p.id !== problemId));
+            if (selectedProblemId === problemId) {
+                setSelectedProblemId(null);
+            }
+        }
+    };
+
+    if (!currentUser) {
+        return <Auth users={users} onLogin={handleLogin} onRegister={(newUser) => setUsers(prev => [...prev, newUser])} />;
     }
-    setProblems(storedProblems);
 
-    let users = mockAuth.getUsers();
-    if (users.length === 0) {
-      // Seed with an admin account if no users exist
-      const admin: User = { id: 'user_admin', username: 'admin', password: 'admin', role: 'admin' };
-      mockAuth.saveUsers([admin]);
-    }
-  }, []);
+    return (
+        <div className="bg-primary text-text-primary min-h-screen font-sans">
+            {/* Header */}
+            <header className="bg-secondary shadow-md sticky top-0 z-10">
+                <nav className="container mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-between h-16">
+                        <div className="flex items-center">
+                            <span className="font-bold text-xl text-highlight">CodeJudge</span>
+                            <div className="hidden md:block ml-10">
+                                <div className="flex items-baseline space-x-2">
+                                    <button onClick={() => setActiveView('IDE')} className={`${activeView === 'IDE' ? 'text-highlight' : 'text-text-secondary'} hover:text-white px-3 py-2 rounded-md text-sm font-medium`}>Lập trình</button>
+                                    <button onClick={() => setActiveView('Submissions')} className={`${activeView === 'Submissions' ? 'text-highlight' : 'text-text-secondary'} hover:text-white px-3 py-2 rounded-md text-sm font-medium`}>Lịch sử nộp bài</button>
+                                    {currentUser.role === 'admin' && (
+                                        <>
+                                            <button onClick={() => setActiveView('UserManagement')} className={`${activeView === 'UserManagement' ? 'text-highlight' : 'text-text-secondary'} hover:text-white px-3 py-2 rounded-md text-sm font-medium`}>Người dùng</button>
+                                            <button onClick={() => setIsCreateProblemModalOpen(true)} className="bg-accent text-text-primary font-semibold px-3 py-2 rounded-md hover:bg-highlight hover:text-white transition-colors text-sm">Bài mới</button>
+                                            <button onClick={() => setIsGenerateProblemModalOpen(true)} className="bg-blue-600 text-white font-semibold px-3 py-2 rounded-md hover:bg-blue-500 transition-colors text-sm">Tạo bằng AI</button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center">
+                             <span className="text-text-secondary mr-4">Xin chào, {currentUser.username}!</span>
+                             <button onClick={() => setIsChangePasswordModalOpen(true)} className="mr-2 bg-accent text-text-primary font-semibold px-3 py-2 rounded-md hover:bg-highlight hover:text-white transition-colors text-sm">Đổi mật khẩu</button>
+                             <button onClick={handleLogout} className="bg-highlight text-white font-semibold px-3 py-2 rounded-md hover:bg-red-500 transition-colors text-sm">Đăng xuất</button>
+                        </div>
+                    </div>
+                </nav>
+            </header>
+            
+            <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+                {activeView === 'IDE' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-10rem)]">
+                        <div className="lg:col-span-3 h-full">
+                            <ProblemList 
+                                problems={filteredProblems}
+                                selectedProblemId={selectedProblemId}
+                                onSelectProblem={setSelectedProblemId}
+                                onDeleteProblem={handleDeleteProblem}
+                                currentUser={currentUser}
+                                activeFilter={activeFilter}
+                                onFilterChange={setActiveFilter}
+                                isLoading={isLoadingProblems}
+                            />
+                        </div>
+                        <div className="lg:col-span-9 h-full flex flex-col gap-4">
+                            <div className="flex-[3_3_0%]">
+                                <ProblemView 
+                                    problem={selectedProblem}
+                                    currentUser={currentUser}
+                                    onManageTestCases={setProblemToManage}
+                                />
+                            </div>
+                            <div className="flex-[2_2_0%]">
+                                <CodeEditor
+                                    code={code}
+                                    setCode={setCode}
+                                    language={language}
+                                    setLanguage={setLanguage}
+                                    onSubmit={handleSubmitCode}
+                                    isJudging={isJudging}
+                                    canSubmit={!!selectedProblem && !isJudging}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {activeView === 'IDE' && <ResultDisplay result={submissionResult} />}
+                {activeView === 'Submissions' && <SubmissionsView submissions={submissions} problems={problems} />}
+                {activeView === 'UserManagement' && <UserManagementView users={users} currentUser={currentUser} onUpdateUserRole={handleUpdateUserRole} onDeleteUser={handleDeleteUser} />}
+            </main>
 
-  const handleLogin = (user: User) => {
-    mockAuth.setCurrentUser(user);
-    setCurrentUser(user);
-  };
-
-  const handleLogout = () => {
-    mockAuth.setCurrentUser(null);
-    setCurrentUser(null);
-    setSelectedProblem(null);
-    setSubmissionResult(null);
-  };
-
-  const handleSelectProblem = (problemId: string) => {
-    const problem = problems.find(p => p.id === problemId);
-    if (problem) {
-      setSelectedProblem(problem);
-      setSubmissionResult(null); // Clear previous result
-    }
-  };
-  
-  const handleCreateProblem = useCallback(async () => {
-    if (currentUser?.role !== 'admin') return;
-    setIsGeneratingProblem(true);
-    setError(null);
-    try {
-      const newProblem = await generateProblem();
-      const updatedProblems = [...problems, newProblem];
-      setProblems(updatedProblems);
-      localStorage.setItem('problems', JSON.stringify(updatedProblems));
-      setSelectedProblem(newProblem); // Automatically select the new problem
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-    } finally {
-      setIsGeneratingProblem(false);
-    }
-  }, [currentUser, problems]);
-
-  const handleSubmitCode = async () => {
-    if (!selectedProblem) return;
-    setIsJudging(true);
-    setSubmissionResult({
-        verdict: Verdict.Judging,
-        explanation: "Bài nộp của bạn đang được chấm...",
-        details: null
-    });
-    setError(null);
-    try {
-      const result = await judgeCode(selectedProblem, code, language);
-      setSubmissionResult(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred during judging.');
-      setSubmissionResult(null);
-    } finally {
-      setIsJudging(false);
-    }
-  };
-
-  if (!currentUser) {
-    return <Auth onLogin={handleLogin} authService={mockAuth} />;
-  }
-
-  return (
-    <div className="min-h-screen bg-primary flex flex-col p-2 sm:p-4">
-      <header className="flex items-center justify-between p-4 mb-4 bg-secondary rounded-lg shadow-lg">
-        <div className="flex items-center space-x-3">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-highlight" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 16 4-4-4-4"></path><path d="m6 8-4 4 4 4"></path><path d="m14.5 4-5 16"></path></svg>
-          <h1 className="text-xl sm:text-2xl font-bold text-text-primary">Gemini Informatics Judge</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          {currentUser.role === 'admin' && (
-            <button
-              onClick={handleCreateProblem}
-              disabled={isGeneratingProblem}
-              className="bg-accent text-text-primary font-semibold px-4 py-2 rounded-md hover:bg-highlight hover:text-white transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-            >
-              {isGeneratingProblem ? 'Đang tạo...' : 'Tạo bài mới'}
-            </button>
-          )}
-          <span className="text-text-secondary">Chào, {currentUser.username}</span>
-          <button onClick={handleLogout} className="text-highlight hover:underline">Đăng xuất</button>
-        </div>
-      </header>
-
-      <main className="flex-grow grid grid-cols-1 lg:grid-cols-12 gap-4 h-[calc(100vh-100px)]">
-        <div className="lg:col-span-3 h-full">
-            <ProblemList 
-                problems={problems}
-                selectedProblemId={selectedProblem?.id || null}
-                onSelectProblem={handleSelectProblem}
-            />
-        </div>
-        <div className="lg:col-span-4 h-full">
-            <ProblemView problem={selectedProblem} isLoading={false} />
-        </div>
-        <div className="lg:col-span-5 flex flex-col gap-4 h-full">
-            <div className="flex-grow min-h-0">
-                <CodeEditor
-                code={code}
-                setCode={setCode}
-                language={language}
-                setLanguage={setLanguage}
-                onSubmit={handleSubmitCode}
-                isJudging={isJudging}
-                canSubmit={!!selectedProblem}
+            {problemToManage && (
+                <TestCaseManager 
+                    problem={problemToManage}
+                    onClose={() => setProblemToManage(null)}
+                    onSave={handleUpdateTestCases}
                 />
-            </div>
-            <div className="flex-shrink-0">
-                {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-lg mb-4">{error}</div>}
-                <ResultDisplay result={submissionResult} />
-            </div>
-        </div>
-      </main>
+            )}
 
-      {/* FIX: Removed non-standard `jsx` and `global` props from the style tag. This syntax is specific to libraries like styled-jsx and is not supported in a standard React setup, causing the TypeScript error. */}
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #16213e; /* secondary */
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #0f3460; /* accent */
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background-color: #e94560; /* highlight */
-        }
-        .prose-invert {
-          --tw-prose-body: #a0a0a0;
-          --tw-prose-headings: #dcdcdc;
-        }
-      `}</style>
-    </div>
-  );
+            {isCreateProblemModalOpen && (
+                <CreateProblemModal 
+                    isOpen={isCreateProblemModalOpen}
+                    onClose={() => setIsCreateProblemModalOpen(false)}
+                    onCreate={handleCreateProblem}
+                />
+            )}
+
+            {isGenerateProblemModalOpen && (
+                <GenerateProblemAIModal 
+                    isOpen={isGenerateProblemModalOpen}
+                    onClose={() => setIsGenerateProblemModalOpen(false)}
+                    onCreate={handleCreateProblem}
+                />
+            )}
+            
+            <ChangePasswordModal 
+                isOpen={isChangePasswordModalOpen}
+                onClose={() => setIsChangePasswordModalOpen(false)}
+                onSubmit={handleChangePassword}
+            />
+
+        </div>
+    );
 };
 
 export default App;

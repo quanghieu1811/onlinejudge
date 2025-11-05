@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { SUPPORTED_LANGUAGES, DEFAULT_CODE } from '../constants';
 
 interface CodeEditorProps {
@@ -15,14 +14,18 @@ interface CodeEditorProps {
 const CodeEditor: React.FC<CodeEditorProps> = ({ code, setCode, language, setLanguage, onSubmit, isJudging, canSubmit }) => {
   
   useEffect(() => {
-    setCode(DEFAULT_CODE[language] || '');
+    // Only reset to default code if the user hasn't typed anything
+    if (code === '' || Object.values(DEFAULT_CODE).includes(code)) {
+      setCode(DEFAULT_CODE[language] || '');
+    }
   }, [language, setCode]);
+
 
   return (
     <div className="bg-secondary rounded-lg flex flex-col h-full">
       <div className="flex items-center justify-between p-3 border-b border-accent">
         <div>
-          <label htmlFor="language-select" className="sr-only">Language</label>
+          <label htmlFor="language-select" className="sr-only">Ngôn ngữ</label>
           <select
             id="language-select"
             value={language}
@@ -45,19 +48,18 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ code, setCode, language, setLan
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Judging...
+              Đang chấm...
             </>
           ) : (
-             'Submit Code'
+            'Nộp bài'
           )}
         </button>
       </div>
-      <div className="flex-grow p-1">
+      <div className="flex-grow relative">
         <textarea
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          placeholder="Enter your code here..."
-          className="w-full h-full bg-primary font-mono text-text-primary p-4 rounded-b-lg resize-none focus:outline-none placeholder-text-secondary custom-scrollbar"
+          className="w-full h-full bg-primary p-4 font-mono text-base leading-6 text-text-primary resize-none border-none outline-none custom-scrollbar"
           spellCheck="false"
         />
       </div>
